@@ -6,8 +6,21 @@
         xmlns:timeLine="clr-namespace:VideoStateAxis;assembly=VideoStateAxis"
         xmlns:local="clr-namespace:Demo"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="MainWindow" Height="1000" Width="1900" Initialized="Window_Initialized">
     <Grid>
-        <timeLine:VideoStateAxisControl x:Name="PART_TimeLine"></timeLine:VideoStateAxisControl>
+        <StackPanel VerticalAlignment="Bottom">
+            <ListView x:Name="listView" d:ItemsSource="{Binding Images}" Height="750">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn/>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="button" Content="Prev" Height="40" Width="64" Click="button_Click"/>
+                <Button x:Name="button_Copy" Content="Next" Height="40" Width="64" Click="button_Copy_Click"/>
+            </StackPanel>
+            <timeLine:VideoStateAxisControl x:Name="PART_TimeLine" Height="159" Width="790"/>
+        </StackPanel>
     </Grid>
 </Window>

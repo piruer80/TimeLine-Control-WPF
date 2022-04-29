@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -14,6 +15,7 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
@@ -258,6 +260,80 @@ namespace VideoStateAxis
         /// 时间轴缩放比例
         /// </summary>
         private double Slider_Magnification = 1;
+
+
+        //------------------------ N E W ---------------------------
+
+
+       public VideoStateItem currVideoItem = new VideoStateItem();
+       public ObservableCollection<VideoStateItem> VideoSource = new ObservableCollection<VideoStateItem>();
+        public VideoStateItem AddVideoSource(string Name)
+        {
+            var item = new VideoStateItem();
+            item.CameraName = Name;
+            item.CameraChecked = true;
+            var charList = new char[1440];
+            item.AxisHistoryTimeList = charList;
+
+            VideoSource.Add(item);
+            return item;
+        }
+
+        public void AddSegment(VideoStateItem videoItem, int from, int to, SegmentType type = SegmentType.Shoot, string imagePath = "")
+        {
+            if(from == 1440 || to > 1440)
+            {
+                from = 1435;
+                to = 1440;
+            }
+
+            if (from > 1440 || to > 1440) return;
+           
+
+            VideoSegment segment = new VideoSegment();
+            var charList = videoItem.AxisHistoryTimeList;
+            videoItem.AxisHistoryTimeList = null;
+            segment.SegmentImage = imagePath;
+
+
+
+            segment.SegmentType = type;
+            if (type == SegmentType.Shoot) segment.SegmantColor = Colors.Red;
+            if (type == SegmentType.Cut) segment.SegmantColor = Colors.Green;
+            if (type == SegmentType.Mark) segment.SegmantColor = Colors.Orange;
+
+
+           
+            for (int j = from; j < to; j++)
+            {
+                charList[j] = '1';
+            }
+
+            videoItem.AxisHistoryTimeList = charList;
+            videoItem.Segments.Add(segment);
+        }
+
+
+        public int imgPage = 0;
+        public void ShowImagePage(int page)
+        {
+            var files = Directory.GetFiles(@"C:\Lenovo\SORT", "*.jpg");
+            int start = page;
+            int end = ((page) + 20);
+
+
+            int position = 0;
+            if (((page * 10) - files.Length) > 0) return;
+
+            for (int i = start; i < end; i++)
+            {
+                if (i == files.Length) break;
+                AddSegment(currVideoItem, position * 15, (position * 15) + 5, SegmentType.Cut, files[i]);
+                position++;
+            }
+        }
+
+
 
         #endregion
 
@@ -842,7 +918,7 @@ namespace VideoStateAxis
                 foreach (var item in HisVideoSources)
                 {
                     Dictionary<KeyValuePair<int, int>, bool> dic = MathToTimeSp(item.AxisHistoryTimeList);
-                    DisplayData(dic);
+                    DisplayData(dic, item);
                 }
             }
         }
@@ -850,23 +926,167 @@ namespace VideoStateAxis
         /// <summary>
         /// 计算填充时间轴查询结果
         /// </summary>
-        private void DisplayData(Dictionary<KeyValuePair<int, int>, bool> dic)
+        private void DisplayData(Dictionary<KeyValuePair<int, int>, bool> dic, VideoStateItem videoItem)
         {
             DateTime serTime = StartTime;
             Canvas TimeCanvas = new Canvas() { Width = (_scrollViewer.ActualWidth - 10) * Slider_Magnification };
+
+            int count = 0;
             foreach (var item in dic)
             {
-                TimeCanvas.Children.Add(new Rectangle()
+
+                Rectangle rec = new Rectangle();
+                rec.Width = item.Key.Value * Dial_Cell_M;
+                rec.Height = item.Value ? 16 : 0;
+                rec.Margin = new Thickness(serTime.Hour * Dial_Cell_H + serTime.Minute * Dial_Cell_M + serTime.Second * Dial_Cell_S, 0, 0, 0);
+
+
+                if (videoItem.Segments.Count > 0 && videoItem.Segments.Count > count)
+                rec.Fill = new SolidColorBrush(videoItem.Segments[count].SegmantColor);
+
+                TimeCanvas.Children.Add(rec);
+
+                if (videoItem.Segments.Count > 0 && videoItem.Segments.Count > count)
                 {
-                    Width = item.Key.Value * Dial_Cell_M,
-                    Height = item.Value ? 16 : 0,
-                    Margin = new Thickness(serTime.Hour * Dial_Cell_H + serTime.Minute * Dial_Cell_M + serTime.Second * Dial_Cell_S, 0, 0, 0)
-                });
+                    if (videoItem.Segments[count].SegmentImage != "" && item.Value)
+                    {
+                        Image img = new Image();
+                        var bmp = new BitmapImage(new Uri(videoItem.Segments[count].SegmentImage));
+                        img.Source = bmp;
+                        img.Width = 100;
+                        img.Height = 100;
+                        img.Tag = false;
+
+
+                        img.Margin = new Thickness(serTime.Hour * Dial_Cell_H + serTime.Minute * Dial_Cell_M + serTime.Second * Dial_Cell_S, 0, 0, 0);
+                        img.MouseDown += Img_MouseDown;
+
+                        TimeCanvas.Children.Add(img);
+                    }
+                }
+
                 serTime = serTime.AddMinutes(item.Key.Value);
+                count++;
             }
             _videoHistoryPanel.Children.Add(TimeCanvas);
         }
 
+        /// <summary>
+        ///  image
+        /// </summary>
+        Image lastImage = null;
+
+        private void Img_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (lastImage != null) minImage(1, lastImage);
+
+            Image img = (Image)sender;
+            BitmapImage bImg = (BitmapImage)img.Source;
+           
+
+            if ((bool)img.Tag)
+            {
+                minImage(1, img);
+                lastImage = null;
+                return;
+            }
+                
+           
+            img.Tag = true;
+
+
+            double imgHeight = bImg.PixelHeight;
+            double imgWidth = bImg.PixelWidth;
+            
+            while (imgHeight > 600)
+            {
+                imgHeight = imgHeight / 1.5;
+            }
+
+            while (imgWidth > 600)
+            {
+                imgWidth = imgWidth / 1.5;
+            }
+
+
+            //DoubleAnimation daW = new DoubleAnimation(img.Width, imgWidth, TimeSpan.FromMilliseconds(250), FillBehavior.HoldEnd);
+            //DoubleAnimation daH = new DoubleAnimation(img.Height, imgHeight, TimeSpan.FromMilliseconds(250), FillBehavior.HoldEnd);
+
+            //var easeFn = new QuarticEase();
+            //daH.EasingFunction = easeFn;
+            //daH.EasingFunction = easeFn;
+
+            //img.BeginAnimation(Image.WidthProperty, daW);
+            //img.BeginAnimation(Image.HeightProperty, daH);
+
+            var storyboard = new Storyboard();
+
+            storyboard.Children.Add(new ThicknessAnimation
+            {
+                From = img.Margin,
+                To = new Thickness(0, 50, 0, 0),
+                Duration = new Duration(TimeSpan.FromSeconds(1))
+            });
+
+            storyboard.Children.Add(new ThicknessAnimation
+            {
+                From = new Thickness(0, 50, 0, 0),
+                To = img.Margin,
+                Duration = new Duration(TimeSpan.FromSeconds(1)),
+                BeginTime = TimeSpan.FromSeconds(6)
+            });
+
+            lastImage = img;
+        }
+
+        private void minImage(int dir, Image img)
+        {
+            BitmapImage bImg = (BitmapImage)img.Source;
+           
+
+            double imgHeight = bImg.PixelHeight;
+            double imgWidth = bImg.PixelWidth;
+
+            if (dir == 0)
+            {
+                while (imgHeight > 600)
+                {
+                    imgHeight = imgHeight / 1.5;
+                }
+
+                while (imgWidth > 600)
+                {
+                    imgWidth = imgWidth / 1.5;
+                }
+            }
+            else if (dir == 1)
+            {
+                while (imgHeight > 100)
+                {
+                    imgHeight = imgHeight / 1.5;
+                }
+
+                while (imgWidth > 100)
+                {
+                    imgWidth = imgWidth / 1.5;
+                }
+            }
+            
+            DoubleAnimation daW = new DoubleAnimation(img.Width, imgWidth, TimeSpan.FromMilliseconds(250), FillBehavior.HoldEnd);
+            DoubleAnimation daH = new DoubleAnimation(img.Height, imgHeight, TimeSpan.FromMilliseconds(250), FillBehavior.HoldEnd);
+
+            var easeFn = new QuarticEase();
+            daH.EasingFunction = easeFn;
+            daH.EasingFunction = easeFn;
+
+            img.BeginAnimation(Image.WidthProperty, daW);
+            img.BeginAnimation(Image.HeightProperty, daH);
+
+        }
+
+       
+
+      
         /// <summary>
         /// 计算断续时间轴
         /// </summary>
@@ -931,10 +1151,10 @@ namespace VideoStateAxis
         /// <returns></returns>
         private FrameworkElementFactory CreatePathElement(string GeometryPath, string ToolTipStr)
         {
-            FrameworkElementFactory path = new FrameworkElementFactory(typeof(Path));
+            FrameworkElementFactory path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
             path.SetValue(CursorProperty, Cursors.Hand);
-            path.SetValue(Path.DataProperty, Geometry.Parse(GeometryPath));
-            path.SetValue(Path.FillProperty, new SolidColorBrush((Color)ColorConverter.ConvertFromString("#c8c7c3")));
+            path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(GeometryPath));
+            path.SetValue(System.Windows.Shapes.Path.FillProperty, new SolidColorBrush((Color)ColorConverter.ConvertFromString("#c8c7c3")));
             path.SetValue(ToolTipProperty, ToolTipStr);
             return path;
         }
@@ -1092,6 +1312,8 @@ namespace VideoStateAxis
             }
         }
 
+
+
         /// <summary>
         /// 将原始控件的样式覆盖
         /// </summary>
@@ -1151,9 +1373,28 @@ namespace VideoStateAxis
         Open
     }
 
-    /// <summary>
-    /// 时间轴对象
-    /// </summary>
+    public enum SegmentType
+    {
+        [Description("Cut")]
+        Cut,
+
+        [Description("Shoot")]
+        Shoot,
+
+        [Description("Mark")]
+        Mark
+    }
+
+    public class VideoSegment 
+    {
+        public Color SegmantColor;
+        public string SegmentImage;
+        public SegmentType SegmentType;
+
+
+    }/// <summary>
+     /// 时间轴对象
+     /// </summary>
     public class VideoStateItem : INotifyPropertyChanged
     {
         private string _cameraName;
@@ -1183,6 +1424,14 @@ namespace VideoStateAxis
             set { _axisHistoryTimeList = value; OnPropertyChanged("AxisHistoryTimeList"); }
         }
 
+
+        private List<VideoSegment> _videosegment = new List<VideoSegment>();
+        public List<VideoSegment> Segments
+        {
+            get => _videosegment;
+            set { _videosegment = value; OnPropertyChanged("VideoSegment"); }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         private void OnPropertyChanged(string propertyName)
@@ -1193,5 +1442,9 @@ namespace VideoStateAxis
                 handler(this, new PropertyChangedEventArgs(propertyName));
             }
         }
+
+
+       
+
     }
 }

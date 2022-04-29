@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using VideoStateAxis;
 
 namespace Demo
@@ -13,26 +17,50 @@ namespace Demo
         public MainWindow()
         {
             InitializeComponent();
-            ContentRendered += MainWindow_ContentRendered;
+         
         }
 
-        private void MainWindow_ContentRendered(object sender, EventArgs e)
+        ObservableCollection<BitmapImage> Images = new ObservableCollection<BitmapImage>();
+    
+
+        private void Window_Initialized(object sender, EventArgs e)
         {
-            var VideoSource = new ObservableCollection<VideoStateItem>();
+            PART_TimeLine.HisVideoSources = PART_TimeLine.VideoSource;
 
-            for (int i = 0; i < 10; i++)
+            ShowImagePage(0);
+        }
+
+        int imgPage = 0;
+        private void button_Copy_Click(object sender, RoutedEventArgs e)
+        {
+            imgPage++;
+            ShowImagePage(imgPage);
+        }
+
+        public void ShowImagePage(int page)
+        {
+            Images.Clear();
+
+            var files = Directory.GetFiles(@"C:\Lenovo\SORT", "*.jpg");
+            int start = page;
+            int end = ((page) + 20);
+
+
+            int position = 0;
+            if (((page * 10) - files.Length) > 0) return;
+
+            for (int i = start; i < end; i++)
             {
-                var item = new VideoStateItem() { CameraName=$"Demo {i.ToString("D2")}",CameraChecked=i%2==0};
-                var charList = new char[1000];
-                for (int j = 0; j < 1000; j++)
-                {
-                    charList[j] = '1';
-                }
-                item.AxisHistoryTimeList = charList;
-                VideoSource.Add(item);
+                if (i == files.Length) break;
+                Images.Add(new BitmapImage(new Uri(files[i])));
+                position++;
             }
+        }
 
-            PART_TimeLine.HisVideoSources = VideoSource;
+        private void button_Click(object sender, RoutedEventArgs e)
+        {
+            imgPage--;
+            ShowImagePage(imgPage);
         }
     }
 }
